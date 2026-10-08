@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShapeShift - 身型重塑試算器</title>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --bg: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text: #1F2937;
+            --fat-color: #F87171;
+            --muscle-color: #34D399;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .container { background: var(--card-bg); padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 600px; }
+        h1 { text-align: center; margin-top: 0; color: var(--primary); font-size: 1.8rem; }
+        p.subtitle { text-align: center; color: #6B7280; margin-bottom: 25px; font-size: 0.9rem; }
+        
+        .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .input-group { display: flex; flex-direction: column; }
+        .input-group label { font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; color: #4B5563; }
+        .input-group input { padding: 10px; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; transition: border-color 0.3s; }
+        .input-group input:focus { outline: none; border-color: var(--primary); }
+        
+        button { grid-column: span 2; padding: 12px; background-color: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: var(--primary-hover); }
+
+        .results { margin-top: 25px; display: none; animation: fadeIn 0.5s ease; }
+        .result-card { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        .result-title { font-weight: bold; font-size: 1.1rem; border-bottom: 2px solid #E5E7EB; padding-bottom: 8px; margin-bottom: 12px; }
+        
+        .macro-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
+        .macro-item span { display: block; font-size: 0.8rem; color: #6B7280; }
+        .macro-item strong { display: block; font-size: 1.2rem; margin-top: 4px; }
+        
+        .bar-container { width: 100%; background: #E5E7EB; border-radius: 8px; height: 24px; display: flex; overflow: hidden; margin-top: 8px; margin-bottom: 15px; }
+        .bar-muscle { background: var(--muscle-color); height: 100%; transition: width 1s ease-in-out; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: bold; white-space: nowrap; }
+        .bar-fat { background: var(--fat-color); height: 100%; transition: width 1s ease-in-out; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: bold; white-space: nowrap; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 480px) { .input-grid { grid-template-columns: 1fr; } button { grid-column: span 1; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>ShapeShift 身型重塑</h1>
+    <p class="subtitle">設定你的身體數據，計算達標所需的體重與營養策略</p>
+    
+    <div class="input-grid">
+        <div class="input-group">
+            <label for="height">身高 (cm)</label>
+            <input type="number" id="height" value="181">
+        </div>
+        <div class="input-group">
+            <label for="weight">目前體重 (kg)</label>
+            <input type="number" id="weight" value="76">
+        </div>
+        <div class="input-group">
+            <label for="currentBF">目前體脂率 (%)</label>
+            <input type="number" id="currentBF" value="17">
+        </div>
+        <div class="input-group">
+            <label for="targetBF">目標體脂率 (%)</label>
+            <input type="number" id="targetBF" value="10">
+        </div>
+        <button onclick="calculate()">生成專屬重塑策略</button>
+    </div>
+
+    <div class="results" id="results">
+        <div class="result-card">
+            <div class="result-title">🎯 目標分析 (假設肌肉量不流失)</div>
+            <p>你的除脂體重 (LBM) 為：<strong id="lbm">0</strong> kg</p>
+            <p>要達到 <span id="displayTargetBF">0</span>% 體脂率，目標體重應為：<strong id="targetWeight" style="color: var(--primary); font-size: 1.2rem;">0</strong> kg</p>
+            <p>你需要純減去脂肪：<strong id="fatToLose">0</strong> kg</p>
+        </div>
+
+        <div class="result-card">
+            <div class="result-title">📊 體態組成視覺化 (重量對比)</div>
+            <label style="font-size: 0.85rem; color: #4B5563;">目前狀態：</label>
+            <div class="bar-container">
+                <div class="bar-muscle" id="currentMuscleBar" style="width: 0%;">肌肉/骨骼</div>
+                <div class="bar-fat" id="currentFatBar" style="width: 0%;">脂肪</div>
+            </div>
+            <label style="font-size: 0.85rem; color: #4B5563;">達標狀態：</label>
+            <div class="bar-container">
+                <div class="bar-muscle" id="targetMuscleBar" style="width: 0%;">肌肉/骨骼</div>
+                <div class="bar-fat" id="targetFatBar" style="width: 0%;">脂肪</div>
+            </div>
+        </div>
+
+        <div class="result-card">
+            <div class="result-title">🍽️ 減脂期每日營養素建議</div>
+            <p style="font-size: 0.85rem; color: #6B7280; margin-top: -5px;">基於 Katch-McArdle 公式並設定 500 大卡熱量赤字</p>
+            <div class="macro-grid">
+                <div class="macro-item">
+                    <span>🔥 目標熱量</span>
+                    <strong id="targetCals">0</strong> <span>kcal</span>
+                </div>
+                <div class="macro-item">
+                    <span>🥩 蛋白質 (維持肌肉)</span>
+                    <strong id="targetProtein">0</strong> <span>g</span>
+                </div>
+                <div class="macro-item">
+                    <span>🥑 脂肪</span>
+                    <strong id="targetFat">0</strong> <span>g</span>
+                </div>
+            </div>
+            <div class="macro-item" style="margin-top: 15px; text-align: center;">
+                <span>🍚 碳水化合物 (剩餘熱量分配)</span>
+                <strong id="targetCarbs">0</strong> <span>g</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function calculate() {
+        // 取得輸入數值
+        const weight = parseFloat(document.getElementById('weight').value);
+        const currentBF = parseFloat(document.getElementById('currentBF').value) / 100;
+        const targetBF = parseFloat(document.getElementById('targetBF').value) / 100;
+        
+        if (!weight || !currentBF || !targetBF) {
+            alert('請填寫完整數值！');
+            return;
+        }
+
+        // 核心計算 (假設除脂體重 LBM 不變)
+        const currentFatMass = weight * currentBF;
+        const leanBodyMass = weight - currentFatMass;
+        
+        // 目標體重 = 除脂體重 / (1 - 目標體脂率)
+        const targetWeight = leanBodyMass / (1 - targetBF);
+        const targetFatMass = targetWeight - leanBodyMass;
+        const fatToLose = currentFatMass - targetFatMass;
+
+        // TDEE 計算 (Katch-McArdle)
+        const bmr = 370 + (21.6 * leanBodyMass);
+        const tdee = bmr * 1.55; // 假設每週中等運動量
+        const targetCals = tdee - 500; // 減脂熱量赤字
+
+        // 營養素分配 (蛋白質 2.2g/kg LBM, 脂肪 1g/kg 體重)
+        const protein = leanBodyMass * 2.2;
+        const fat = targetWeight * 1.0;
+        const carbs = (targetCals - (protein * 4) - (fat * 9)) / 4;
+
+        // 更新 UI 數值
+        document.getElementById('lbm').innerText = leanBodyMass.toFixed(1);
+        document.getElementById('displayTargetBF').innerText = (targetBF * 100).toFixed(1);
+        document.getElementById('targetWeight').innerText = targetWeight.toFixed(1);
+        document.getElementById('fatToLose').innerText = Math.max(0, fatToLose).toFixed(1);
+        
+        document.getElementById('targetCals').innerText = Math.round(targetCals);
+        document.getElementById('targetProtein').innerText = Math.round(protein);
+        document.getElementById('targetFat').innerText = Math.round(fat);
+        document.getElementById('targetCarbs').innerText = Math.round(carbs > 0 ? carbs : 0);
+
+        // 顯示結果區塊
+        document.getElementById('results').style.display = 'block';
+
+        // 延遲更新視覺化長條圖以觸發 CSS 動畫
+        setTimeout(() => {
+            const currentMusclePct = ((leanBodyMass / weight) * 100).toFixed(1);
+            const currentFatPct = (currentBF * 100).toFixed(1);
+            
+            const targetMusclePct = ((leanBodyMass / targetWeight) * 100).toFixed(1);
+            const targetFatPct = (targetBF * 100).toFixed(1);
+
+            document.getElementById('currentMuscleBar').style.width = currentMusclePct + '%';
+            document.getElementById('currentMuscleBar').innerText = `除脂 ${leanBodyMass.toFixed(1)}kg`;
+            document.getElementById('currentFatBar').style.width = currentFatPct + '%';
+            document.getElementById('currentFatBar').innerText = `脂肪 ${currentFatMass.toFixed(1)}kg`;
+
+            document.getElementById('targetMuscleBar').style.width = targetMusclePct + '%';
+            document.getElementById('targetMuscleBar').innerText = `除脂 ${leanBodyMass.toFixed(1)}kg`;
+            document.getElementById('targetFatBar').style.width = targetFatPct + '%';
+            document.getElementById('targetFatBar').innerText = `脂肪 ${targetFatMass.toFixed(1)}kg`;
+        }, 50);
+    }
+</script>
+
+</body>
+</html>
